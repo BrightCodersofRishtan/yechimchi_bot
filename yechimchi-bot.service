@@ -1,0 +1,17 @@
+[Unit]
+Description=Yechimchi Telegram Bot
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/yechimchi_bot
+ExecStart=/usr/bin/python3 /root/yechimchi_bot/bot.py
+Restart=always
+RestartSec=5
+Environment=BOT_TOKEN=your_bot_token_here
+Environment=ADMIN_GROUP_ID=-100000000000
+Environment=CHANNEL_ID=@yechimchi_channel
+
+[Install]
+WantedBy=multi-user.target
