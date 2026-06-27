@@ -15,6 +15,8 @@ from database.db import (
     delete_specialist, revoke_specialist, approve_specialist,
     update_specialist_field, get_stats,
     set_category_mapping, get_all_user_telegram_ids,
+    set_auto_approve, disable_auto_approve,
+    get_auto_approve_end_date, is_auto_approve_active,
 )
 from utils.excel_export import export_specialists_to_excel
 
@@ -43,6 +45,7 @@ def admin_main_menu():
         [InlineKeyboardButton(text="📂 Mutaxassis kategoriyalari", callback_data="adm_speccat")],
         [InlineKeyboardButton(text="🔗 Kategoriya moslash", callback_data="adm_mapping")],
         [InlineKeyboardButton(text="👨‍💼 Mutaxassislar", callback_data="adm_specialists_0")],
+        [InlineKeyboardButton(text="⚡ Auto-tasdiqlash", callback_data="adm_autoapprove")],
         [InlineKeyboardButton(text="📊 Statistika", callback_data="adm_stats")],
         [InlineKeyboardButton(text="📢 Xabar tarqatish (Broadcast)", callback_data="adm_broadcast")],
         [InlineKeyboardButton(text="📤 Excel export", callback_data="adm_export")],
@@ -580,6 +583,77 @@ async def admin_broadcast_send(callback: CallbackQuery, state: FSMContext, bot):
         f"❌ Yetib bormadi: {failed}",
         parse_mode="HTML"
     )
+
+
+# ── AUTO-TASDIQLASH ────────────────────────────────────────────
+
+@router.callback_query(F.data == "adm_autoapprove")
+async def admin_autoapprove_menu(callback: CallbackQuery):
+    if not is_admin(callback.from_user.id):
+        await callback.answer("⛔ Ruxsat yo'q!", show_alert=True)
+        return
+
+    active = await is_auto_approve_active()
+    end_date = await get_auto_approve_end_date()
+
+    if active:
+        from datetime import datetime
+        end = datetime.fromisoformat(end_date)
+        status_text = (
+            f"🟢 <b>Auto-tasdiqlash YOQILGAN</b>\n\n"
+            f"📅 Tugash sanasi: {end.strftime('%d.%m.%Y %H:%M')}\n\n"
+            f"Yangi mutaxassislar avtomatik tasdiqlanadi."
+        )
+        buttons = [
+            [InlineKeyboardButton(text="⛔ O'chirish", callback_data="aa_disable")],
+            [InlineKeyboardButton(text="🔙 Orqaga", callback_data="adm_back")],
+        ]
+    else:
+        status_text = (
+            "🔴 <b>Auto-tasdiqlash O'CHIRILGAN</b>\n\n"
+            "Muddatni tanlang — shu muddatgacha barcha yangi\n"
+            "mutaxassislar avtomatik tasdiqlanadi:"
+        )
+        buttons = [
+            [InlineKeyboardButton(text="📅 3 oylik", callback_data="aa_set_3")],
+            [InlineKeyboardButton(text="📅 6 oylik", callback_data="aa_set_6")],
+            [InlineKeyboardButton(text="📅 1 yillik", callback_data="aa_set_12")],
+            [InlineKeyboardButton(text="🔙 Orqaga", callback_data="adm_back")],
+        ]
+
+    await callback.message.edit_text(
+        f"⚡ <b>AUTO-TASDIQLASH</b>\n\n{status_text}",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("aa_set_"))
+async def admin_autoapprove_set(callback: CallbackQuery):
+    if not is_admin(callback.from_user.id):
+        return
+
+    months = int(callback.data.split("_")[2])
+    from datetime import datetime, timedelta
+    end_date = datetime.now() + timedelta(days=months * 30)
+    await set_auto_approve(end_date.isoformat())
+
+    labels = {3: "3 oy", 6: "6 oy", 12: "1 yil"}
+    label = labels.get(months, f"{months} oy")
+
+    await callback.answer(f"✅ Auto-tasdiqlash {label}ga yoqildi!", show_alert=True)
+    await admin_autoapprove_menu(callback)
+
+
+@router.callback_query(F.data == "aa_disable")
+async def admin_autoapprove_disable(callback: CallbackQuery):
+    if not is_admin(callback.from_user.id):
+        return
+
+    await disable_auto_approve()
+    await callback.answer("⛔ Auto-tasdiqlash o'chirildi!", show_alert=True)
+    await admin_autoapprove_menu(callback)
 
 
 # ── EXCEL EXPORT ──────────────────────────────────────────────

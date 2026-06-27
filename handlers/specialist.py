@@ -9,7 +9,7 @@ from database.db import (
     get_or_create_user, save_specialist, get_specialists_by_category,
     get_specialist_by_id, increment_recommendation,
     get_active_specialist_categories, get_specialist_category_by_id,
-    get_specialist_rating,
+    get_specialist_rating, is_auto_approve_active, approve_specialist,
 )
 from keyboards.keyboards import (
     main_menu, specialist_categories_keyboard, back_keyboard,
@@ -187,6 +187,11 @@ async def recommend_reason(message: Message, state: FSMContext, bot):
 
     await increment_recommendation(spec_id)
 
+    # Auto-tasdiqlash tekshiruvi
+    auto_approve = await is_auto_approve_active()
+    if auto_approve:
+        await approve_specialist(spec_id)
+
     admin_text = (
         f"⭐ YANGI MUTAXASSIS TAVSIYASI\n\n"
         f"👤 Ism: {data['fullname']}\n"
@@ -196,21 +201,55 @@ async def recommend_reason(message: Message, state: FSMContext, bot):
         f"💬 Tavsiya sababi: {message.text.strip()}\n\n"
         f"Tavsiya qilgan: {message.from_user.full_name}"
     )
+
+    if auto_approve:
+        admin_text += "\n\n⚡ AUTO-TASDIQLANDI"
+        # Kanalga ham yuboramiz
+        from config import CHANNEL_ID
+        from keyboards.keyboards import contact_keyboard
+        spec = await get_specialist_by_id(spec_id)
+        if spec:
+            channel_text = (
+                f"👤 {spec['fullname']}\n"
+                f"🏷 {spec.get('category', '')}\n"
+                f"💼 {spec['profession']}\n"
+                f"⭐ Tavsiyalar: {spec['recommendation_count']}\n"
+                f"📝 {spec['description']}"
+            )
+            try:
+                await bot.send_message(
+                    CHANNEL_ID,
+                    channel_text,
+                    reply_markup=contact_keyboard(spec_id)
+                )
+            except Exception as e:
+                import logging
+                logging.error(f"Kanalga yuborishda xato: {e}")
+
     try:
-        await bot.send_message(
-            ADMIN_GROUP_ID,
-            admin_text,
-            reply_markup=admin_specialist_with_media_keyboard(spec_id)
-        )
+        if auto_approve:
+            await bot.send_message(ADMIN_GROUP_ID, admin_text)
+        else:
+            await bot.send_message(
+                ADMIN_GROUP_ID,
+                admin_text,
+                reply_markup=admin_specialist_with_media_keyboard(spec_id)
+            )
     except Exception as e:
         import logging
         logging.error(f"Admin guruhga yuborishda xato: {e}")
 
     await state.clear()
-    await message.answer(
-        "✅ Tavsiyangiz yuborildi! Admin ko'rib chiqadi.",
-        reply_markup=main_menu()
-    )
+    if auto_approve:
+        await message.answer(
+            "✅ Tavsiyangiz qabul qilindi va avtomatik tasdiqlandi!",
+            reply_markup=main_menu()
+        )
+    else:
+        await message.answer(
+            "✅ Tavsiyangiz yuborildi! Admin ko'rib chiqadi.",
+            reply_markup=main_menu()
+        )
 
 
 # ── MUTAXASSISLARNI KO'RISH ──────────────────────────────────

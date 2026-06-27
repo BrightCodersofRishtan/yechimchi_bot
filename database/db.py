@@ -106,6 +106,12 @@ async def init_db():
                 FOREIGN KEY (specialist_category_id) REFERENCES specialist_categories(id)
             )
         """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            )
+        """)
         await db.commit()
 
         # Boshlang'ich kategoriyalarni bir marta yuklash (agar bo'sh bo'lsa)
@@ -561,6 +567,47 @@ async def get_stats():
         return stats
 
 # ── BROADCAST ──────────────────────────────────────────────
+
+# ── AUTO-TASDIQLASH SOZLAMALARI ────────────────────────────────
+
+async def set_auto_approve(end_date: str):
+    """Auto-tasdiqlashni yoqish. end_date: ISO format (YYYY-MM-DD HH:MM:SS)"""
+    async with aiosqlite.connect(DATABASE_URL) as db:
+        await db.execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES ('auto_approve', ?)",
+            (end_date,)
+        )
+        await db.commit()
+
+
+async def disable_auto_approve():
+    async with aiosqlite.connect(DATABASE_URL) as db:
+        await db.execute("DELETE FROM settings WHERE key = 'auto_approve'")
+        await db.commit()
+
+
+async def get_auto_approve_end_date():
+    """Auto-tasdiqlash tugash sanasini qaytaradi. None = o'chirilgan"""
+    async with aiosqlite.connect(DATABASE_URL) as db:
+        async with db.execute(
+            "SELECT value FROM settings WHERE key = 'auto_approve'"
+        ) as cursor:
+            row = await cursor.fetchone()
+        return row[0] if row else None
+
+
+async def is_auto_approve_active():
+    """Auto-tasdiqlash hozir faolmi?"""
+    end_date = await get_auto_approve_end_date()
+    if not end_date:
+        return False
+    from datetime import datetime
+    try:
+        end = datetime.fromisoformat(end_date)
+        return datetime.now() < end
+    except Exception:
+        return False
+
 
 async def get_all_user_telegram_ids():
     async with aiosqlite.connect(DATABASE_URL) as db:
