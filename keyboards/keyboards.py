@@ -2,7 +2,15 @@ from aiogram.types import (
     ReplyKeyboardMarkup, KeyboardButton,
     InlineKeyboardMarkup, InlineKeyboardButton
 )
-from config import CATEGORIES, SPECIALIST_CATEGORIES
+from config import CATEGORIES, SPECIALIST_CATEGORIES, CHANNEL_ID
+
+
+def subscription_keyboard():
+    channel_url = f"https://t.me/{CHANNEL_ID.lstrip('@')}"
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📢 Kanalga obuna bo'lish", url=channel_url)],
+        [InlineKeyboardButton(text="✅ Tekshirish", callback_data="check_sub")],
+    ])
 
 
 def main_menu():

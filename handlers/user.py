@@ -1,5 +1,5 @@
 from aiogram import Router, F
-from aiogram.types import Message
+from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.filters import CommandStart, Command
@@ -10,7 +10,9 @@ from database.db import (
     get_specialists_by_category, get_active_problem_categories,
     get_problem_category_by_id, get_mapped_specialist_category,
 )
-from keyboards.keyboards import main_menu, categories_keyboard, phone_keyboard, specialists_list_keyboard
+from keyboards.keyboards import main_menu, categories_keyboard, phone_keyboard, specialists_list_keyboard, subscription_keyboard
+from middlewares.subscription import is_subscribed
+from config import CHANNEL_ID
 
 router = Router()
 
@@ -34,6 +36,28 @@ async def start(message: Message, state: FSMContext):
         "ishonchli mutaxassislarni topishingiz mumkin.",
         reply_markup=main_menu()
     )
+
+
+@router.callback_query(F.data == "check_sub")
+async def check_subscription(callback: CallbackQuery, bot):
+    if await is_subscribed(bot, callback.from_user.id):
+        await callback.message.delete()
+        await get_or_create_user(
+            telegram_id=callback.from_user.id,
+            fullname=callback.from_user.full_name
+        )
+        await callback.message.answer(
+            "👋 Assalomu alaykum! Yechimchi botga xush kelibsiz!\n\n"
+            "Bu bot orqali muammongizni yozib qoldirishingiz yoki "
+            "ishonchli mutaxassislarni topishingiz mumkin.",
+            reply_markup=main_menu()
+        )
+    else:
+        await callback.answer(
+            "❌ Siz hali kanalga obuna bo'lmadingiz!\n"
+            "Iltimos, avval kanalga obuna bo'ling.",
+            show_alert=True
+        )
 
 
 @router.message(Command("help"))

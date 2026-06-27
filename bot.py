@@ -9,6 +9,7 @@ from config import BOT_TOKEN
 from handlers import user, specialist, admin, contact
 from handlers import rating, admin_panel
 from database.db import init_db
+from middlewares.subscription import SubscriptionMiddleware, SubscriptionCallbackMiddleware
 
 logging.basicConfig(level=logging.INFO)
 
@@ -35,6 +36,9 @@ async def main():
     dp.include_router(specialist.router)
     dp.include_router(admin.router)
     dp.include_router(contact.router)
+
+    dp.message.middleware(SubscriptionMiddleware())
+    dp.callback_query.middleware(SubscriptionCallbackMiddleware())
 
     await dp.start_polling(bot)
 
