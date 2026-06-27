@@ -17,6 +17,8 @@ from database.db import (
     set_category_mapping, get_all_user_telegram_ids,
     set_auto_approve, disable_auto_approve,
     get_auto_approve_end_date, is_auto_approve_active,
+    set_auto_contact, disable_auto_contact,
+    get_auto_contact_end_date, is_auto_contact_active,
 )
 from utils.excel_export import export_specialists_to_excel
 
@@ -46,6 +48,7 @@ def admin_main_menu():
         [InlineKeyboardButton(text="🔗 Kategoriya moslash", callback_data="adm_mapping")],
         [InlineKeyboardButton(text="👨‍💼 Mutaxassislar", callback_data="adm_specialists_0")],
         [InlineKeyboardButton(text="⚡ Auto-tasdiqlash", callback_data="adm_autoapprove")],
+        [InlineKeyboardButton(text="📱 Auto-aloqa", callback_data="adm_autocontact")],
         [InlineKeyboardButton(text="📊 Statistika", callback_data="adm_stats")],
         [InlineKeyboardButton(text="📢 Xabar tarqatish (Broadcast)", callback_data="adm_broadcast")],
         [InlineKeyboardButton(text="📤 Excel export", callback_data="adm_export")],
@@ -654,6 +657,80 @@ async def admin_autoapprove_disable(callback: CallbackQuery):
     await disable_auto_approve()
     await callback.answer("⛔ Auto-tasdiqlash o'chirildi!", show_alert=True)
     await admin_autoapprove_menu(callback)
+
+
+# ── AUTO-ALOQA ───────────────────────────────────────────────
+
+@router.callback_query(F.data == "adm_autocontact")
+async def admin_autocontact_menu(callback: CallbackQuery):
+    if not is_admin(callback.from_user.id):
+        await callback.answer("⛔ Ruxsat yo'q!", show_alert=True)
+        return
+
+    active = await is_auto_contact_active()
+    end_date = await get_auto_contact_end_date()
+
+    if active:
+        from datetime import datetime
+        end = datetime.fromisoformat(end_date)
+        status_text = (
+            f"🟢 <b>Auto-aloqa YOQILGAN</b>\n\n"
+            f"📅 Tugash sanasi: {end.strftime('%d.%m.%Y %H:%M')}\n\n"
+            f"Foydalanuvchilar mutaxassis raqamini\n"
+            f"admin tasdiqisiz oladi."
+        )
+        buttons = [
+            [InlineKeyboardButton(text="⛔ O'chirish", callback_data="ac_disable")],
+            [InlineKeyboardButton(text="🔙 Orqaga", callback_data="adm_back")],
+        ]
+    else:
+        status_text = (
+            "🔴 <b>Auto-aloqa O'CHIRILGAN</b>\n\n"
+            "Muddatni tanlang — shu muddatgacha\n"
+            "mutaxassis raqami admin tasdiqisiz\n"
+            "avtomatik yuboriladi:"
+        )
+        buttons = [
+            [InlineKeyboardButton(text="📅 1 oylik", callback_data="ac_set_1")],
+            [InlineKeyboardButton(text="📅 3 oylik", callback_data="ac_set_3")],
+            [InlineKeyboardButton(text="📅 6 oylik", callback_data="ac_set_6")],
+            [InlineKeyboardButton(text="📅 1 yillik", callback_data="ac_set_12")],
+            [InlineKeyboardButton(text="🔙 Orqaga", callback_data="adm_back")],
+        ]
+
+    await callback.message.edit_text(
+        f"📱 <b>AUTO-ALOQA</b>\n\n{status_text}",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("ac_set_"))
+async def admin_autocontact_set(callback: CallbackQuery):
+    if not is_admin(callback.from_user.id):
+        return
+
+    months = int(callback.data.split("_")[2])
+    from datetime import datetime, timedelta
+    end_date = datetime.now() + timedelta(days=months * 30)
+    await set_auto_contact(end_date.isoformat())
+
+    labels = {1: "1 oy", 3: "3 oy", 6: "6 oy", 12: "1 yil"}
+    label = labels.get(months, f"{months} oy")
+
+    await callback.answer(f"✅ Auto-aloqa {label}ga yoqildi!", show_alert=True)
+    await admin_autocontact_menu(callback)
+
+
+@router.callback_query(F.data == "ac_disable")
+async def admin_autocontact_disable(callback: CallbackQuery):
+    if not is_admin(callback.from_user.id):
+        return
+
+    await disable_auto_contact()
+    await callback.answer("⛔ Auto-aloqa o'chirildi!", show_alert=True)
+    await admin_autocontact_menu(callback)
 
 
 # ── EXCEL EXPORT ──────────────────────────────────────────────

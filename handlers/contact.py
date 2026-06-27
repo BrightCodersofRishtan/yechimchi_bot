@@ -5,7 +5,8 @@ from config import ADMIN_GROUP_ID
 from database.db import (
     get_or_create_user, save_contact_request,
     get_contact_request, approve_contact_request,
-    get_specialist_by_id, check_existing_request
+    get_specialist_by_id, check_existing_request,
+    is_auto_contact_active,
 )
 from keyboards.keyboards import admin_contact_keyboard
 from handlers.rating import rating_keyboard
@@ -24,6 +25,51 @@ async def request_contact(callback: CallbackQuery, bot):
 
     user = await get_or_create_user(callback.from_user.id, callback.from_user.full_name)
 
+    # Auto-aloqa tekshiruvi
+    auto_contact = await is_auto_contact_active()
+
+    if auto_contact:
+        request_id = await save_contact_request(user['id'], spec_id)
+        await approve_contact_request(request_id)
+
+        try:
+            await bot.send_message(
+                callback.from_user.id,
+                f"✅ Mutaxassis ma'lumotlari:\n\n"
+                f"👤 {spec['fullname']}\n"
+                f"💼 {spec['profession']}\n"
+                f"📱 Telefon: {spec['phone']}"
+            )
+            await bot.send_message(
+                callback.from_user.id,
+                f"⭐ {spec['fullname']} haqida baho bering:",
+                reply_markup=rating_keyboard(spec_id)
+            )
+        except Exception:
+            await callback.answer(
+                f"📱 Telefon: {spec['phone']}",
+                show_alert=True
+            )
+            return
+
+        # Admin guruhiga xabar
+        username = callback.from_user.username
+        username_text = f"@{username}" if username else "username yo'q"
+        try:
+            await bot.send_message(
+                ADMIN_GROUP_ID,
+                f"📩 ALOQA (auto)\n\n"
+                f"👤 {callback.from_user.full_name} ({username_text})\n"
+                f"🔍 {spec['fullname']} ({spec['profession']})\n\n"
+                f"⚡ Avtomatik yuborildi"
+            )
+        except Exception:
+            pass
+
+        await callback.answer("✅ Kontakt yuborildi!")
+        return
+
+    # Qo'lda tasdiqlash rejimi
     already = await check_existing_request(user['id'], spec_id)
     if already:
         await callback.answer(

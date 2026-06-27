@@ -609,6 +609,43 @@ async def is_auto_approve_active():
         return False
 
 
+async def set_auto_contact(end_date: str):
+    """Auto-aloqa yuborishni yoqish. end_date: ISO format"""
+    async with aiosqlite.connect(DATABASE_URL) as db:
+        await db.execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES ('auto_contact', ?)",
+            (end_date,)
+        )
+        await db.commit()
+
+
+async def disable_auto_contact():
+    async with aiosqlite.connect(DATABASE_URL) as db:
+        await db.execute("DELETE FROM settings WHERE key = 'auto_contact'")
+        await db.commit()
+
+
+async def get_auto_contact_end_date():
+    async with aiosqlite.connect(DATABASE_URL) as db:
+        async with db.execute(
+            "SELECT value FROM settings WHERE key = 'auto_contact'"
+        ) as cursor:
+            row = await cursor.fetchone()
+        return row[0] if row else None
+
+
+async def is_auto_contact_active():
+    end_date = await get_auto_contact_end_date()
+    if not end_date:
+        return False
+    from datetime import datetime
+    try:
+        end = datetime.fromisoformat(end_date)
+        return datetime.now() < end
+    except Exception:
+        return False
+
+
 async def get_all_user_telegram_ids():
     async with aiosqlite.connect(DATABASE_URL) as db:
         async with db.execute("SELECT telegram_id FROM users") as cursor:
